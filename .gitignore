@@ -1,0 +1,49 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+.env
+
+# Python
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+
+# Environment & secrets
+.env
+.env.*
+*.env
+
+# Airflow specific
+airflow.db
+airflow.cfg
+logs/
+simple_auth_manager_passwords.json.generated
+
+# IDE / OS
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Data & outputs
+input/
+output/
+*.csv
+*.parquet
+*.json.gz
+
+# But keep necessary config JSON if any
+!requirements.txt   # not JSON, but example
+!config/*.json      # uncomment if you have specific config files you want to track
