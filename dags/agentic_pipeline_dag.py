@@ -12,18 +12,44 @@ logger=logging.getLogger(__name__)
 
 #config because of agentic pipeline
 class Config:
-    BASE_DIR=os.getenv('PIPELINE_BASE_DIR',r'C:\Users\dnyap\OneDrive\Desktop\SelfHealingDataPipeline')
-    INPUT_FILE=os.getenv('PIPELINE_INPUT_FILE',
-                         f'{BASE_DIR}\\input\\yelp_academic_dataset_review.json')
-    OUTPUT_DIR=os.getenv('PIPELINE_OUTPUT_DIR',
-                         f'{BASE_DIR}\\outout\\')
+    #BASE_DIR=os.getenv('PIPELINE_BASE_DIR',r'C:\Users\dnyap\OneDrive\Desktop\SelfHealingDataPipeline')
+    #INPUT_FILE=os.getenv('PIPELINE_INPUT_FILE',
+    #                     f'{BASE_DIR}\\input\\yelp_academic_dataset_review.json')
+    #OUTPUT_DIR=os.getenv('PIPELINE_OUTPUT_DIR',
+    #                     f'{BASE_DIR}\\output\\')
 
-    MAX_TEXT_LENGTH = int(os.getenv('PIPELIEN_MAX_TEXT_LENGTH',2000))
+    BASE_DIR = os.getenv(
+        "PIPELINE_BASE_DIR",
+        "/opt/airflow"
+    )
+
+    INPUT_FILE = os.getenv(
+        "PIPELINE_INPUT_FILE",
+        os.path.join(
+            BASE_DIR,
+            "input",
+            "yelp_academic_dataset_review.json"
+        )
+    )
+
+    OUTPUT_DIR = os.getenv(
+        "PIPELINE_OUTPUT_DIR",
+        os.path.join(
+            BASE_DIR,
+            "output"
+        )
+    )
+
+    MAX_TEXT_LENGTH = int(os.getenv('PIPELINE_MAX_TEXT_LENGTH',2000))
     DEFAULT_BATCH_SIZE =100
     DEFAULT_OFFSET=0
 
     #ollama settings
-    OLLAMA_HOST=os.getenv('OLLAMA_HOST',"http://localhost:11434")
+    #OLLAMA_HOST=os.getenv('OLLAMA_HOST',"http://localhost:11434")
+    OLLAMA_HOST = os.getenv(
+    "OLLAMA_HOST",
+    "http://host.docker.internal:11434"
+    )
     OLLAMA_MODEL=os.getenv('OLLAMA_MODEL','llama3.2')
     OLLAMA_TIMEOUT=int(os.getenv('OLLAMA_TIMEOUT',120))
     OLLAMA_RETRIES=int(os.getenv('OLLAMA_RETRIES',3))
@@ -120,7 +146,7 @@ def _parse_ollama_response(response_text:str):
             clean_text='\n'.join(lines[1:-1]) if lines[-1].strip()== '```' else '\n'.join(lines[1:])
 
         parsed=json.loads(clean_text)
-        sentiment=parsed.egt('sentiment','NEUTRAL').upper()
+        sentiment=parsed.get('sentiment','NEUTRAL').upper()
         confidence=float(parsed.get('confidence',0.0))
 
         if sentiment not in ['POSITIVE','NEGATIVE','NEUTRAL']:
@@ -186,19 +212,19 @@ def _heal_review(review:dict)->dict:
     elif not text.strip():
         result['error_type'] = 'empty_text'
         result['healed_text'] = 'No review text provided.'
-        result['action_taken'] = 'filled_with_placeholder'
+        result['action_token'] = 'filled_with_placeholder'
         result['was_healed'] = True
 
     elif not re.search(r'[a-zA-Z0-9]', text):
         result['error_type'] = 'special_characters_only'
         result['healed_text'] = '[Non-text content]'
-        result['action_taken'] = 'replaced_special_characters'
+        result['action_token'] = 'replaced_special_characters'
         result['was_healed'] = True
 
     elif len(text) > Config.MAX_TEXT_LENGTH:
         result['error_type'] = 'too_long'
         result['healed_text'] = text[:Config.MAX_TEXT_LENGTH-3] + '...'
-        result['action_taken'] = 'truncated_text'
+        result['action_token'] = 'truncated_text'
         result['was_healed'] = True
 
     else:
@@ -247,9 +273,24 @@ def _analyze_with_ollama(healed_reviews:list[dict],model_info:dict)-> list[dict]
                 break
 
             except Exception as e:
+                '''
                 if attempt < Config.OLLAMA_RETRIES-1:
-                    logger.info(f"Attemot {attempt+1} failed for review {review.get("review_id")} : {e}.")
-                    prediction={'label': 'NEUTRAL', 'score': 0.5, 'error': str(e)}
+                    logger.info(
+                        f"Attempt {attempt + 1} failed for review "
+                        f"{review.get('review_id')}: {e}."
+                    )                    
+                    prediction={'label': 'NEUTRAL', 'score': 0.5, 'error': str(e)}'''
+                logger.warning(
+                    f"Attempt {attempt + 1}/"
+                    f"{Config.OLLAMA_RETRIES} failed for review "
+                    f"{review.get('review_id')}: {e}"
+                )
+
+                prediction = {
+                    "label": "NEUTRAL",
+                    "score": 0.5,
+                    "error": str(e)
+                }
 
         if (idx + 1) % 10 == 0 or (idx + 1) == total:
             logger.info(f'Processed {idx + 1}/{total} reviews for sentiment analysis.')
@@ -264,7 +305,7 @@ def _analyze_with_ollama(healed_reviews:list[dict],model_info:dict)-> list[dict]
             'confidence': round(prediction.get('score'), 4), # type: ignore
             'status': 'healed' if review.get('was_healed') else 'success',
             'healing_applied': review.get('was_healed'),
-            'healing_action': review.get('action_taken') if review.get('was_healed') else None,
+            'healing_action': review.get('action_token') if review.get('was_healed') else None,
             'error_type': review.get('error_type') if review.get('was_healed') else None,
             'metadata': review.get('metadata', {}),
         })
@@ -327,7 +368,7 @@ def self_healing_pipeline():
         context=get_current_context()
         params=context.get('params',{})
         model_name=params.get('ollama_model',Config.OLLAMA_MODEL)
-        logger.info(f"Usinf OLLAMA model:{model_name}")
+        logger.info(f"Using OLLAMA model:{model_name}")
         return _load_ollama_model(model_name)
 
     @task
@@ -336,11 +377,14 @@ def self_healing_pipeline():
         params=context.get('params',{})
         batch_size=params.get('batch_size',Config.DEFAULT_BATCH_SIZE)
         offset=params.get('offset',Config.DEFAULT_OFFSET)
-        logger.info(f"Loadinf reviews with batch size {batch_size} and offset {offset}")
+        logger.info(f"Loading reviews with batch size {batch_size} and offset {offset}")
         return _load_from_file(params,batch_size,offset)
 
     @task
     def diagnose_and_heal_batch(reviews:list[dict[str,Any]])->list[dict[str,Any]]:
+        if not reviews:
+            logger.warning("No reviews received for healing.")
+            return []
         healed_reviews=[_heal_review(review) for review in reviews]
         healed_count=sum(1 for r in healed_reviews if r.get('was_healed',True))
         logger.info(f"Healed {healed_count} out of {len(reviews)} reviews in the batch.")
@@ -354,7 +398,7 @@ def self_healing_pipeline():
         return _analyze_with_ollama(healed_reviews,model_info)
 
     @task
-    def aggregate_results(results: list[list[dict]])->dict[str, Any]:
+    def aggregate_results(results: list[dict[str,Any]])->dict[str, Any]:
         context = get_current_context()
         params=context.get('params',{})
         results = list(results)
@@ -383,8 +427,8 @@ def self_healing_pipeline():
             if stars and sentiment:
                 key = f'{int(stars)}_star'
                 if key not in star_sentiment:
-                    star_sentiment[stars] = { 'POSITIVE': 0, 'NEGATIVE': 0, 'NEUTRAL': 0 }
-                star_sentiment[stars][sentiment] += 1
+                    star_sentiment[key] = { 'POSITIVE': 0, 'NEGATIVE': 0, 'NEUTRAL': 0 }
+                star_sentiment[key][sentiment] += 1
 
         confidence_by_status = { 'success': [], 'healed': [], 'degraded': [] }
         for r in results:
