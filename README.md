@@ -340,16 +340,4 @@ pytest
 
 > **Note:** A test suite is not currently included in the repository. Adding unit tests for the healing functions and integration tests for the DAG is a recommended next step.
 
-## Contributing
 
-Contributions are welcome! Please follow these steps:
-
-1. Fork the repository.
-2. Create a feature branch (`git checkout -b feature/your-feature`).
-3. Commit your changes (`git commit -am 'Add new feature'`).
-4. Push to the branch (`git push origin feature/your-feature`).
-5. Open a Pull Request.
-
-## Acknowledgements
-
-This project was built while following the [Self-Healing Pipeline tutorial on YouTube](https://www.youtube.com/watch?v=As1QSF3LnvA) and is based on the original [airscholar/SelfHealingPipeline](https://github.com/airscholar/SelfHealingPipeline) repository.
