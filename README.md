@@ -22,8 +22,7 @@ An Apache Airflow-based data pipeline that automatically detects and heals data 
 - [Docker Setup](#docker-setup)
 - [Dependencies](#dependencies)
 - [Testing](#testing)
-- [Contributing](#contributing)
-- [Acknowledgements](#acknowledgements)
+
 
 ## Overview
 
